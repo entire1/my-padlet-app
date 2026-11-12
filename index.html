@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>실시간 협업 패들렛 (Korean Version)</title>
+  <title>실시간 협업 패들렛 - 칸반 & 자유 캔버스</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM CDN -->
@@ -11,9 +11,33 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <!-- Babel Compiler for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
+<body class="bg-slate-950 text-slate-100 min-h-screen select-none sm:select-auto">
   <div id="root"></div>
+
+  <!-- Firebase SDK (Modular v11.6.1) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    window.FirebaseSDK = {
+      initializeApp,
+      getAuth,
+      signInAnonymously,
+      signInWithCustomToken,
+      onAuthStateChanged,
+      getFirestore,
+      collection,
+      doc,
+      onSnapshot,
+      setDoc,
+      deleteDoc
+    };
+    window.dispatchEvent(new Event('firebase-ready'));
+  </script>
 
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
@@ -23,8 +47,8 @@
       {
         id: 'board-1',
         title: '🚀 팀 브레인스토밍 & 프로젝트 보드',
-        description: '아이디어, 자료 조사, 그리고 할 일을 함께 공유하는 협업 공간입니다.',
-        layout: 'grid',
+        description: '아이디어, 자료 조사, 그리고 할 일을 실시간으로 함께 공유하는 공간입니다.',
+        layout: 'grid', // 'grid' | 'kanban' | 'canvas'
         bgType: 'gradient',
         bgValue: 'from-slate-900 via-indigo-950 to-slate-900',
         columns: ['할 일 (To Do)', '진행 중', '완료'],
@@ -40,6 +64,11 @@
             pinned: true,
             x: 40,
             y: 40,
+            media: {
+              type: 'image',
+              url: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?auto=format&fit=crop&w=800&q=80',
+              caption: '디자인 무드보드 컨셉'
+            },
             checklist: [
               { id: 'c1', text: '컬러 대비 검토', done: true },
               { id: 'c2', text: '로고 벡터 추출', done: false }
@@ -50,238 +79,1174 @@
           },
           {
             id: 'post-2',
-            title: '⚡ 실시간 동기화 기능 구현 완료',
-            content: '웹 앱이 성공적으로 생성되었습니다! 새로운 카드를 추가하고 동료들과 공유해보세요.',
-            column: '완료',
+            title: '⚡ 실시간 협업 모드 가이드',
+            content: '상단 메뉴에서 [격자형], [칸반보드], [자유배치] 모드를 자유롭게 전환해 보세요!',
+            column: '할 일 (To Do)',
             color: '#e0f2fe',
-            tags: ['개발', '배포'],
+            tags: ['가이드', '협업'],
             likes: 8,
             pinned: false,
             x: 380,
             y: 60,
             checklist: [],
             comments: []
+          },
+          {
+            id: 'post-3',
+            title: '✅ 배포 및 연동 완료',
+            content: '여러 기기에서 동시에 접속해 카드를 작성하고 실시간으로 공유해보세요.',
+            column: '완료',
+            color: '#dcfce7',
+            tags: ['완료', '배포'],
+            likes: 15,
+            pinned: false,
+            x: 120,
+            y: 340,
+            checklist: [
+              { id: 'c3', text: '웹사이트 주소 생성', done: true }
+            ],
+            comments: []
           }
         ]
       }
     ];
 
-    const CARD_COLORS = [
-      { label: '클린 화이트', bg: '#ffffff' },
-      { label: '따뜻한 앰버', bg: '#fef3c7' },
-      { label: '스카이 블루', bg: '#e0f2fe' },
-      { label: '프레시 그린', bg: '#dcfce7' },
-      { label: '로즈 핑크', bg: '#ffe4e6' },
-      { label: '라벤더', bg: '#f3e8ff' }
+    const BG_OPTIONS = [
+      { label: '인디고 나이트', type: 'gradient', value: 'from-slate-900 via-indigo-950 to-slate-900' },
+      { label: '선셋 글로우', type: 'gradient', value: 'from-rose-900 via-purple-900 to-slate-900' },
+      { label: '에메랄드 포레스트', type: 'gradient', value: 'from-emerald-950 via-teal-900 to-slate-900' },
+      { label: '미니멀 라이트', type: 'gradient', value: 'from-slate-100 via-gray-100 to-slate-200' },
+      { label: '소프트 피치', type: 'gradient', value: 'from-orange-100 via-amber-50 to-rose-100' },
+      { label: '퓨어 다크', type: 'solid', value: 'bg-gray-950' }
     ];
 
-    function App() {
-      const [boards, setBoards] = useState(() => {
-        const saved = localStorage.getItem('padlet_boards');
-        return saved ? JSON.parse(saved) : DEFAULT_BOARDS;
-      });
-      const [activeBoardId, setActiveBoardId] = useState(boards[0]?.id || 'board-1');
-      const [searchQuery, setSearchQuery] = useState('');
-      const [isModalOpen, setIsModalOpen] = useState(false);
+    const CARD_COLORS = [
+      { label: '클린 화이트', bg: '#ffffff', border: '#e2e8f0' },
+      { label: '따뜻한 앰버', bg: '#fef3c7', border: '#fde68a' },
+      { label: '스카이 블루', bg: '#e0f2fe', border: '#bae6fd' },
+      { label: '프레시 그린', bg: '#dcfce7', border: '#bbf7d0' },
+      { label: '로즈 핑크', bg: '#ffe4e6', border: '#fecdd3' },
+      { label: '라벤더', bg: '#f3e8ff', border: '#e9d5ff' },
+      { label: '차콜 다크', bg: '#1e293b', border: '#334155' }
+    ];
 
+    // Helper Icon Component using Lucide
+    const Icon = ({ name, className = "w-4 h-4" }) => {
+      const ref = useRef(null);
+      useEffect(() => {
+        if (window.lucide && ref.current) {
+          ref.current.innerHTML = `<i data-lucide="${name}" class="${className}"></i>`;
+          window.lucide.createIcons({ root: ref.current });
+        }
+      }, [name, className]);
+      return <span ref={ref} className="inline-flex items-center justify-center shrink-0" />;
+    };
+
+    function App() {
+      const [user, setUser] = useState(null);
+      const [dbInstance, setDbInstance] = useState(null);
+      const [isCloudConnected, setIsCloudConnected] = useState(false);
+      const [toastMsg, setToastMsg] = useState('');
+
+      const [boards, setBoards] = useState(DEFAULT_BOARDS);
+      const [activeBoardId, setActiveBoardId] = useState('board-1');
+      const [searchQuery, setSearchQuery] = useState('');
+      const [selectedTag, setSelectedTag] = useState('ALL');
+
+      // Modals
+      const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+      const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
+      const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+      const [editingPost, setEditingPost] = useState(null);
+
+      // Forms
       const [postForm, setPostForm] = useState({
         title: '',
         content: '',
+        column: '할 일 (To Do)',
         color: '#ffffff',
-        tags: '',
-        column: '할 일 (To Do)'
+        tagsInput: '',
+        mediaType: 'none',
+        mediaUrl: '',
+        mediaCaption: '',
+        mediaTitle: '',
+        checklistText: ''
       });
 
+      const [boardForm, setBoardForm] = useState({
+        title: '',
+        description: '',
+        layout: 'grid',
+        bgValue: BG_OPTIONS[0].value,
+        bgType: BG_OPTIONS[0].type
+      });
+
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 3000);
+      };
+
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'padlet-live-board';
+
+      // --- 1. INITIALIZE FIREBASE & AUTH ---
       useEffect(() => {
-        localStorage.setItem('padlet_boards', JSON.stringify(boards));
-      }, [boards]);
+        const initFirebase = async () => {
+          if (!window.FirebaseSDK) return;
+          const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore } = window.FirebaseSDK;
 
-      const activeBoard = boards.find((b) => b.id === activeBoardId) || boards[0];
+          // 환경 변수(__firebase_config)가 있으면 자동 연결, 없으면 내장 실시간 데모 설정 사용
+          let firebaseConfig = null;
+          if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            try {
+              firebaseConfig = JSON.parse(__firebase_config);
+            } catch (e) {
+              console.warn('Config parse failed', e);
+            }
+          }
 
-      const handleAddPost = (e) => {
+          if (!firebaseConfig) {
+            // 👇 아래 중괄호 { } 안에 파이어베이스에서 복사한 firebaseConfig 내용을 붙여넣으세요!
+            const firebaseConfig = {
+  apiKey: "AIzaSyB_qVG_HiPIr0ysswdt4BHb5FL8f1oM6FI",
+  authDomain: "my-padlet-4fbdc.firebaseapp.com",
+  projectId: "my-padlet-4fbdc",
+  storageBucket: "my-padlet-4fbdc.firebasestorage.app",
+  messagingSenderId: "91914410908",
+  appId: "1:91914410908:web:6d11a239b689af59e88659"
+};
+          }
+
+          if (!firebaseConfig || firebaseConfig.apiKey === "여기에_apiKey_입력") {
+            console.log('Running in standalone mode or awaiting config');
+            return;
+          }
+
+          try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            setDbInstance(db);
+
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+              await signInAnonymously(auth);
+            }
+
+            onAuthStateChanged(auth, (currentUser) => {
+              setUser(currentUser);
+              if (currentUser) setIsCloudConnected(true);
+            });
+          } catch (err) {
+            console.error('Firebase connection error:', err);
+          }
+        };
+
+        if (window.FirebaseSDK) {
+          initFirebase();
+        } else {
+          window.addEventListener('firebase-ready', initFirebase);
+          return () => window.removeEventListener('firebase-ready', initFirebase);
+        }
+      }, []);
+
+      // --- 2. REAL-TIME FIRESTORE SYNC ---
+      useEffect(() => {
+        if (!user || !dbInstance || !window.FirebaseSDK) return;
+        const { collection, doc, onSnapshot, setDoc } = window.FirebaseSDK;
+
+        const boardsRef = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'boards');
+        const unsubscribe = onSnapshot(
+          boardsRef,
+          (snapshot) => {
+            if (!snapshot.empty) {
+              const remoteBoards = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+              setBoards(remoteBoards);
+            } else {
+              DEFAULT_BOARDS.forEach((b) => {
+                setDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', 'boards', b.id), b);
+              });
+            }
+          },
+          (error) => {
+            console.error('Firestore sync error:', error);
+          }
+        );
+
+        return () => unsubscribe();
+      }, [user, dbInstance]);
+
+      // Sync Helper
+      const saveBoard = async (updatedBoard) => {
+        setBoards((prev) => prev.map((b) => (b.id === updatedBoard.id ? updatedBoard : b)));
+        if (dbInstance && user && window.FirebaseSDK) {
+          const { doc, setDoc } = window.FirebaseSDK;
+          try {
+            await setDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', 'boards', updatedBoard.id), updatedBoard);
+          } catch (err) {
+            console.error('Cloud save failed:', err);
+          }
+        }
+      };
+
+      const activeBoard = boards.find((b) => b.id === activeBoardId) || boards[0] || DEFAULT_BOARDS[0];
+
+      const availableTags = Array.from(
+        new Set((activeBoard?.posts || []).flatMap((p) => p.tags || []))
+      );
+
+      const filteredPosts = (activeBoard?.posts || []).filter((post) => {
+        const matchesSearch =
+          post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (post.tags && post.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())));
+        const matchesTag = selectedTag === 'ALL' || (post.tags && post.tags.includes(selectedTag));
+        return matchesSearch && matchesTag;
+      });
+
+      const sortedPosts = [...filteredPosts].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+      // --- BOARD ACTIONS ---
+      const handleCreateBoard = async (e) => {
+        e.preventDefault();
+        if (!boardForm.title.trim()) return;
+
+        const newBoard = {
+          id: `board-${Date.now()}`,
+          title: boardForm.title,
+          description: boardForm.description,
+          layout: boardForm.layout,
+          bgType: boardForm.bgType,
+          bgValue: boardForm.bgValue,
+          columns: ['할 일 (To Do)', '진행 중', '완료'],
+          posts: []
+        };
+
+        setBoards([...boards, newBoard]);
+        if (dbInstance && user && window.FirebaseSDK) {
+          const { doc, setDoc } = window.FirebaseSDK;
+          await setDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', 'boards', newBoard.id), newBoard);
+        }
+
+        setActiveBoardId(newBoard.id);
+        setIsBoardModalOpen(false);
+        setBoardForm({ title: '', description: '', layout: 'grid', bgValue: BG_OPTIONS[0].value, bgType: BG_OPTIONS[0].type });
+        showToast('새 보드가 생성되었습니다!');
+      };
+
+      const handleDeleteBoard = async (id) => {
+        if (boards.length <= 1) {
+          showToast('최소 1개의 보드는 유지해야 합니다.');
+          return;
+        }
+        const remaining = boards.filter((b) => b.id !== id);
+        setBoards(remaining);
+        setActiveBoardId(remaining[0].id);
+
+        if (dbInstance && user && window.FirebaseSDK) {
+          const { doc, deleteDoc } = window.FirebaseSDK;
+          await deleteDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', 'boards', id));
+        }
+        showToast('보드가 삭제되었습니다.');
+      };
+
+      // --- POST ACTIONS ---
+      const handleSavePost = (e) => {
         e.preventDefault();
         if (!postForm.title.trim() && !postForm.content.trim()) return;
 
-        const newPost = {
-          id: `post-${Date.now()}`,
-          title: postForm.title || '제목 없음',
-          content: postForm.content,
-          column: postForm.column,
-          color: postForm.color,
-          tags: postForm.tags ? postForm.tags.split(',').map(t => t.trim()) : [],
-          likes: 0,
-          pinned: false,
-          checklist: [],
-          comments: []
-        };
+        const parsedTags = postForm.tagsInput
+          ? postForm.tagsInput.split(',').map((t) => t.trim()).filter(Boolean)
+          : [];
 
-        const updatedBoard = {
-          ...activeBoard,
-          posts: [newPost, ...activeBoard.posts]
-        };
+        let mediaObj = null;
+        if (postForm.mediaType === 'image' && postForm.mediaUrl) {
+          mediaObj = { type: 'image', url: postForm.mediaUrl, caption: postForm.mediaCaption || '' };
+        } else if (postForm.mediaType === 'link' && postForm.mediaUrl) {
+          mediaObj = { type: 'link', url: postForm.mediaUrl, title: postForm.mediaTitle || postForm.mediaUrl };
+        }
 
-        setBoards(boards.map(b => b.id === activeBoard.id ? updatedBoard : b));
-        setIsModalOpen(false);
-        setPostForm({ title: '', content: '', color: '#ffffff', tags: '', column: activeBoard.columns[0] });
+        const checklistItems = postForm.checklistText
+          ? postForm.checklistText
+              .split('\n')
+              .filter((line) => line.trim())
+              .map((item, idx) => ({ id: `c-${Date.now()}-${idx}`, text: item.trim(), done: false }))
+          : [];
+
+        let updatedPosts;
+        if (editingPost) {
+          updatedPosts = activeBoard.posts.map((p) =>
+            p.id === editingPost.id
+              ? {
+                  ...p,
+                  title: postForm.title,
+                  content: postForm.content,
+                  column: postForm.column || activeBoard.columns[0],
+                  color: postForm.color,
+                  tags: parsedTags,
+                  media: mediaObj || (postForm.mediaType === 'none' ? null : p.media),
+                  checklist: checklistItems.length > 0 ? checklistItems : p.checklist
+                }
+              : p
+          );
+          showToast('카드가 수정되었습니다.');
+        } else {
+          const newPost = {
+            id: `post-${Date.now()}`,
+            title: postForm.title || '제목 없음',
+            content: postForm.content,
+            column: postForm.column || activeBoard.columns[0] || '할 일 (To Do)',
+            color: postForm.color,
+            tags: parsedTags,
+            likes: 0,
+            pinned: false,
+            x: Math.floor(Math.random() * 240) + 40,
+            y: Math.floor(Math.random() * 180) + 40,
+            media: mediaObj,
+            checklist: checklistItems,
+            comments: []
+          };
+          updatedPosts = [newPost, ...activeBoard.posts];
+          showToast('새 카드가 추가되었습니다!');
+        }
+
+        saveBoard({ ...activeBoard, posts: updatedPosts });
+        closePostModal();
       };
 
-      const handleLike = (postId) => {
-        const updatedPosts = activeBoard.posts.map(p =>
-          p.id === postId ? { ...p, likes: p.likes + 1 } : p
-        );
-        setBoards(boards.map(b => b.id === activeBoard.id ? { ...activeBoard, posts: updatedPosts } : b));
+      const openEditPost = (post) => {
+        setEditingPost(post);
+        setPostForm({
+          title: post.title,
+          content: post.content,
+          column: post.column,
+          color: post.color,
+          tagsInput: (post.tags || []).join(', '),
+          mediaType: post.media?.type || 'none',
+          mediaUrl: post.media?.url || '',
+          mediaCaption: post.media?.caption || '',
+          mediaTitle: post.media?.title || '',
+          checklistText: (post.checklist || []).map((c) => c.text).join('\n')
+        });
+        setIsPostModalOpen(true);
       };
 
-      const handleDelete = (postId) => {
-        const updatedPosts = activeBoard.posts.filter(p => p.id !== postId);
-        setBoards(boards.map(b => b.id === activeBoard.id ? { ...activeBoard, posts: updatedPosts } : b));
+      const closePostModal = () => {
+        setIsPostModalOpen(false);
+        setEditingPost(null);
+        setPostForm({
+          title: '',
+          content: '',
+          column: activeBoard?.columns[0] || '할 일 (To Do)',
+          color: '#ffffff',
+          tagsInput: '',
+          mediaType: 'none',
+          mediaUrl: '',
+          mediaCaption: '',
+          mediaTitle: '',
+          checklistText: ''
+        });
       };
 
-      const filteredPosts = activeBoard.posts.filter(p =>
-        p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.content.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const handleCopyShareLink = () => {
+        const url = window.location.href;
+        const tempInput = document.createElement('input');
+        tempInput.value = url;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+        showToast('현재 보드 링크가 클립보드에 복사되었습니다!');
+      };
 
       return (
-        <div className="min-h-screen flex flex-col font-sans bg-slate-950 text-slate-100">
-          {/* Header */}
-          <header className="bg-slate-900 border-b border-slate-800 p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className={`min-h-screen flex flex-col font-sans transition-all duration-300 ${activeBoard.bgType === 'gradient' ? `bg-gradient-to-br ${activeBoard.bgValue}` : activeBoard.bgValue}`}>
+          
+          {/* Toast Notification */}
+          {toastMsg && (
+            <div className="fixed bottom-5 right-5 z-50 bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2 animate-bounce">
+              <Icon name="sparkles" className="w-4 h-4" />
+              <span>{toastMsg}</span>
+            </div>
+          )}
+
+          {/* --- HEADER --- */}
+          <header className="sticky top-0 z-30 bg-slate-900/85 backdrop-blur-md border-b border-slate-800 text-slate-100 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-lg">
             <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-lg">P</div>
+              <div className="p-2 bg-indigo-600 rounded-xl shadow-inner relative">
+                <Icon name="layers" className="w-5 h-5 text-white" />
+                {isCloudConnected && (
+                  <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  </span>
+                )}
+              </div>
               <div>
-                <h1 className="font-bold text-base">{activeBoard.title}</h1>
-                <p className="text-xs text-slate-400">{activeBoard.description}</p>
+                <div className="flex items-center space-x-1.5">
+                  <select
+                    value={activeBoardId}
+                    onChange={(e) => setActiveBoardId(e.target.value)}
+                    className="bg-slate-800 text-slate-100 text-sm sm:text-base font-bold rounded-lg px-2.5 py-1 border border-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer max-w-[200px] sm:max-w-xs truncate"
+                  >
+                    {boards.map((b) => (
+                      <option key={b.id} value={b.id}>{b.title}</option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={() => setIsBoardModalOpen(true)}
+                    title="새 보드 만들기"
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition"
+                  >
+                    <Icon name="plus" className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => handleDeleteBoard(activeBoardId)}
+                    title="현재 보드 삭제"
+                    className="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-lg border border-slate-700 transition"
+                  >
+                    <Icon name="trash-2" className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex items-center space-x-2 mt-0.5">
+                  <p className="text-[11px] text-slate-400 max-w-[220px] sm:max-w-md truncate">
+                    {activeBoard.description}
+                  </p>
+                  <span className={`text-[10px] px-2 py-0.2 rounded-full flex items-center gap-1 font-semibold border ${isCloudConnected ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800' : 'bg-indigo-950/80 text-indigo-300 border-indigo-800'}`}>
+                    <Icon name="wifi" className="w-2.5 h-2.5" />
+                    {isCloudConnected ? '실시간 클라우드 동기화' : '협업 보드 활성'}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
-              <input
-                type="text"
-                placeholder="검색..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-slate-800 text-xs px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none"
-              />
+            {/* Layout Mode Switcher & Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="bg-slate-800 p-1 rounded-xl border border-slate-700 flex items-center space-x-1">
+                <button
+                  onClick={() => saveBoard({ ...activeBoard, layout: 'grid' })}
+                  className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    activeBoard.layout === 'grid' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Icon name="layout-grid" className="w-3.5 h-3.5" />
+                  <span>격자형</span>
+                </button>
+                <button
+                  onClick={() => saveBoard({ ...activeBoard, layout: 'kanban' })}
+                  className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    activeBoard.layout === 'kanban' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Icon name="columns" className="w-3.5 h-3.5" />
+                  <span>칸반보드</span>
+                </button>
+                <button
+                  onClick={() => saveBoard({ ...activeBoard, layout: 'canvas' })}
+                  className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    activeBoard.layout === 'canvas' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Icon name="move" className="w-3.5 h-3.5" />
+                  <span>자유배치</span>
+                </button>
+              </div>
+
               <button
-                onClick={() => setIsModalOpen(true)}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-lg"
+                onClick={() => setIsShareModalOpen(true)}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl border border-slate-700 transition"
               >
-                + 새 카드 작성
+                <Icon name="share-2" className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">공유</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setPostForm((prev) => ({ ...prev, column: activeBoard.columns[0] || '할 일 (To Do)' }));
+                  setIsPostModalOpen(true);
+                }}
+                className="flex items-center space-x-1 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition"
+              >
+                <Icon name="plus" className="w-4 h-4" />
+                <span>카드 추가</span>
               </button>
             </div>
           </header>
 
-          {/* Main Board */}
-          <main className="flex-1 p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredPosts.map((post) => (
-                <div
-                  key={post.id}
-                  className="rounded-2xl p-4 text-slate-900 shadow-xl border border-slate-200/50 flex flex-col justify-between"
-                  style={{ backgroundColor: post.color }}
-                >
-                  <div>
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-bold text-sm">{post.title}</h3>
-                      <button
-                        onClick={() => handleDelete(post.id)}
-                        className="text-xs text-slate-400 hover:text-rose-600 font-bold"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    {post.content && (
-                      <p className="text-xs text-slate-700 mb-3 whitespace-pre-line leading-relaxed">
-                        {post.content}
-                      </p>
-                    )}
-                    {post.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {post.tags.map(t => (
-                          <span key={t} className="text-[10px] bg-black/10 px-2 py-0.5 rounded-full font-semibold">
-                            #{t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+          {/* --- SEARCH & TAG FILTER BAR --- */}
+          <section className="bg-slate-900/60 backdrop-blur-sm border-b border-slate-800/80 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="relative flex-1 max-w-xs">
+              <span className="absolute left-3 top-2 text-slate-400">
+                <Icon name="search" className="w-3.5 h-3.5" />
+              </span>
+              <input
+                type="text"
+                placeholder="카드 제목, 내용, 태그 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-800/90 border border-slate-700 rounded-lg pl-8 pr-7 py-1.5 text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-2 text-slate-400 hover:text-white">
+                  <Icon name="x" className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
-                  <div className="pt-2 border-t border-black/10 flex justify-between items-center text-xs">
-                    <button
-                      onClick={() => handleLike(post.id)}
-                      className="flex items-center space-x-1 hover:opacity-70 font-semibold"
-                    >
-                      <span>❤️</span>
-                      <span>{post.likes}</span>
-                    </button>
-                    <span className="text-[10px] bg-black/5 px-2 py-0.5 rounded font-medium">
-                      {post.column}
-                    </span>
-                  </div>
-                </div>
+            <div className="flex items-center space-x-1.5 overflow-x-auto py-1">
+              <Icon name="tag" className="w-3.5 h-3.5 text-slate-400" />
+              <button
+                onClick={() => setSelectedTag('ALL')}
+                className={`px-2.5 py-1 rounded-md font-medium whitespace-nowrap transition ${
+                  selectedTag === 'ALL' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                전체
+              </button>
+              {availableTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setSelectedTag(tag)}
+                  className={`px-2.5 py-1 rounded-md font-medium whitespace-nowrap transition ${
+                    selectedTag === tag ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  #{tag}
+                </button>
               ))}
             </div>
+          </section>
+
+          {/* --- MAIN WORKSPACE --- */}
+          <main className="flex-1 p-4 md:p-6 overflow-x-auto relative">
+            {/* 1. GRID LAYOUT */}
+            {activeBoard.layout === 'grid' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
+                {sortedPosts.map((post) => (
+                  <PostCard
+                    key={post.id}
+                    post={post}
+                    columns={activeBoard.columns}
+                    onLike={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, likes: p.likes + 1 } : p) })}
+                    onPin={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, pinned: !p.pinned } : p) })}
+                    onEdit={() => openEditPost(post)}
+                    onDelete={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.filter(p => p.id !== post.id) })}
+                    onToggleChecklist={(itemId) => saveBoard({
+                      ...activeBoard,
+                      posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, checklist: p.checklist.map(c => c.id === itemId ? { ...c, done: !c.done } : c) } : p)
+                    })}
+                    onAddComment={(text) => {
+                      const newCm = { id: `cm-${Date.now()}`, author: user ? `참여자(${user.uid.slice(0,4)})` : '팀원', text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+                      saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, comments: [...(p.comments || []), newCm] } : p) });
+                    }}
+                    onMoveColumn={(col) => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, column: col } : p) })}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* 2. KANBAN BOARD LAYOUT */}
+            {activeBoard.layout === 'kanban' && (
+              <div className="flex space-x-4 overflow-x-auto pb-6 items-start min-h-[65vh]">
+                {activeBoard.columns.map((colName) => {
+                  const colPosts = sortedPosts.filter((p) => p.column === colName);
+                  return (
+                    <div key={colName} className="w-80 shrink-0 bg-slate-900/80 border border-slate-800 rounded-2xl p-3 flex flex-col max-h-[80vh] shadow-xl">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-800 px-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-sm text-slate-100">{colName}</span>
+                          <span className="text-xs bg-slate-800 text-indigo-400 font-bold px-2 py-0.5 rounded-full border border-slate-700">
+                            {colPosts.length}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setPostForm((prev) => ({ ...prev, column: colName }));
+                            setIsPostModalOpen(true);
+                          }}
+                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded-md transition"
+                        >
+                          <Icon name="plus" className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex-1 overflow-y-auto space-y-3 mt-3 pr-1">
+                        {colPosts.map((post) => (
+                          <PostCard
+                            key={post.id}
+                            post={post}
+                            columns={activeBoard.columns}
+                            onLike={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, likes: p.likes + 1 } : p) })}
+                            onPin={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, pinned: !p.pinned } : p) })}
+                            onEdit={() => openEditPost(post)}
+                            onDelete={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.filter(p => p.id !== post.id) })}
+                            onToggleChecklist={(itemId) => saveBoard({
+                              ...activeBoard,
+                              posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, checklist: p.checklist.map(c => c.id === itemId ? { ...c, done: !c.done } : c) } : p)
+                            })}
+                            onAddComment={(text) => {
+                              const newCm = { id: `cm-${Date.now()}`, author: user ? `참여자(${user.uid.slice(0,4)})` : '팀원', text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+                              saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, comments: [...(p.comments || []), newCm] } : p) });
+                            }}
+                            onMoveColumn={(col) => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, column: col } : p) })}
+                          />
+                        ))}
+                        {colPosts.length === 0 && (
+                          <div className="border-2 border-dashed border-slate-800 rounded-xl p-6 text-center text-slate-500 text-xs">
+                            카드가 없습니다. 상단 + 버튼으로 추가해보세요!
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 3. FREEFORM CANVAS LAYOUT (MOUSE & TOUCH DRAGGABLE) */}
+            {activeBoard.layout === 'canvas' && (
+              <div className="relative w-full h-[78vh] border border-slate-800 bg-slate-950/50 rounded-2xl overflow-auto shadow-inner">
+                <div className="absolute inset-0 bg-[radial-gradient(#475569_1px,transparent_1px)] [background-size:20px_20px] opacity-30 pointer-events-none" />
+                <div className="sticky top-3 left-3 z-10 inline-block bg-slate-900/90 text-slate-300 text-[11px] px-3 py-1.5 rounded-full border border-slate-700 shadow">
+                  💡 카드를 마우스나 손가락으로 끌어 원하는 위치에 자유롭게 배치하세요!
+                </div>
+                {sortedPosts.map((post) => (
+                  <DraggableCanvasPost
+                    key={post.id}
+                    post={post}
+                    columns={activeBoard.columns}
+                    onLike={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, likes: p.likes + 1 } : p) })}
+                    onPin={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, pinned: !p.pinned } : p) })}
+                    onEdit={() => openEditPost(post)}
+                    onDelete={() => saveBoard({ ...activeBoard, posts: activeBoard.posts.filter(p => p.id !== post.id) })}
+                    onToggleChecklist={(itemId) => saveBoard({
+                      ...activeBoard,
+                      posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, checklist: p.checklist.map(c => c.id === itemId ? { ...c, done: !c.done } : c) } : p)
+                    })}
+                    onAddComment={(text) => {
+                      const newCm = { id: `cm-${Date.now()}`, author: user ? `참여자(${user.uid.slice(0,4)})` : '팀원', text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+                      saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, comments: [...(p.comments || []), newCm] } : p) });
+                    }}
+                    onMoveColumn={(col) => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, column: col } : p) })}
+                    onUpdatePos={(newX, newY) => saveBoard({ ...activeBoard, posts: activeBoard.posts.map(p => p.id === post.id ? { ...p, x: newX, y: newY } : p) })}
+                  />
+                ))}
+              </div>
+            )}
           </main>
 
-          {/* Modal */}
-          {isModalOpen && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full">
-                <h3 className="font-bold text-base mb-4">새 카드 만들기</h3>
-                <form onSubmit={handleAddPost} className="space-y-4 text-xs">
+          {/* --- MODAL: ADD / EDIT POST --- */}
+          {isPostModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+              <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl max-w-lg w-full p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+                <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+                  <h3 className="text-base font-bold flex items-center gap-2">
+                    <Icon name="edit-3" className="w-4 h-4 text-indigo-400" />
+                    {editingPost ? '카드 수정하기' : '새 카드 작성하기'}
+                  </h3>
+                  <button onClick={closePostModal} className="text-slate-400 hover:text-white p-1">
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSavePost} className="space-y-4 mt-4 text-xs">
                   <div>
-                    <label className="block mb-1 font-semibold text-slate-300">제목</label>
+                    <label className="block text-slate-300 font-semibold mb-1">제목</label>
                     <input
                       type="text"
-                      placeholder="카드 제목"
+                      placeholder="카드 제목을 입력하세요..."
                       value={postForm.title}
                       onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-slate-100"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:ring-2 focus:ring-indigo-500 text-sm"
                     />
                   </div>
+
                   <div>
-                    <label className="block mb-1 font-semibold text-slate-300">내용</label>
+                    <label className="block text-slate-300 font-semibold mb-1">내용</label>
                     <textarea
-                      rows="3"
-                      placeholder="내용을 입력하세요..."
+                      rows={3}
+                      placeholder="공유하고 싶은 내용을 적어보세요..."
                       value={postForm.content}
                       onChange={(e) => setPostForm({ ...postForm, content: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-slate-100"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">칸반 상태 (컬럼)</label>
+                      <select
+                        value={postForm.column}
+                        onChange={(e) => setPostForm({ ...postForm, column: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                      >
+                        {activeBoard.columns.map((col) => (
+                          <option key={col} value={col}>{col}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">태그 (쉼표로 구분)</label>
+                      <input
+                        type="text"
+                        placeholder="아이디어, 디자인, 중요"
+                        value={postForm.tagsInput}
+                        onChange={(e) => setPostForm({ ...postForm, tagsInput: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block mb-1 font-semibold text-slate-300">카드 배경색</label>
-                    <div className="flex space-x-2">
-                      {CARD_COLORS.map(c => (
+                    <label className="block text-slate-300 font-semibold mb-1.5">카드 배경색</label>
+                    <div className="flex items-center space-x-2">
+                      {CARD_COLORS.map((c) => (
                         <button
                           key={c.bg}
                           type="button"
                           onClick={() => setPostForm({ ...postForm, color: c.bg })}
-                          className={`w-6 h-6 rounded-full border-2 ${postForm.color === c.bg ? 'ring-2 ring-indigo-500' : ''}`}
-                          style={{ backgroundColor: c.bg }}
+                          className={`w-7 h-7 rounded-full border-2 transition transform hover:scale-110 ${
+                            postForm.color === c.bg ? 'ring-2 ring-indigo-500 scale-110' : ''
+                          }`}
+                          style={{ backgroundColor: c.bg, borderColor: c.border }}
                         />
                       ))}
                     </div>
                   </div>
-                  <div className="flex justify-end space-x-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsModalOpen(false)}
-                      className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl"
-                    >
-                      취소
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold"
-                    >
-                      생성하기
+
+                  {/* Media Attach */}
+                  <div className="border border-slate-800 rounded-xl p-3 bg-slate-800/40">
+                    <label className="block text-slate-300 font-semibold mb-2">이미지 / 링크 첨부</label>
+                    <div className="flex space-x-2 mb-2">
+                      {['none', 'image', 'link'].map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setPostForm({ ...postForm, mediaType: type })}
+                          className={`px-3 py-1 rounded-lg font-medium transition ${
+                            postForm.mediaType === type ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {type === 'none' ? '없음' : type === 'image' ? '이미지 URL' : '웹 링크'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {postForm.mediaType === 'image' && (
+                      <div className="space-y-2">
+                        <input
+                          type="url"
+                          placeholder="이미지 주소 입력 (https://...)"
+                          value={postForm.mediaUrl}
+                          onChange={(e) => setPostForm({ ...postForm, mediaUrl: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100"
+                        />
+                        <input
+                          type="text"
+                          placeholder="이미지 설명 (선택)"
+                          value={postForm.mediaCaption}
+                          onChange={(e) => setPostForm({ ...postForm, mediaCaption: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100"
+                        />
+                      </div>
+                    )}
+
+                    {postForm.mediaType === 'link' && (
+                      <div className="space-y-2">
+                        <input
+                          type="url"
+                          placeholder="웹사이트 링크 (https://...)"
+                          value={postForm.mediaUrl}
+                          onChange={(e) => setPostForm({ ...postForm, mediaUrl: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100"
+                        />
+                        <input
+                          type="text"
+                          placeholder="링크 제목"
+                          value={postForm.mediaTitle}
+                          onChange={(e) => setPostForm({ ...postForm, mediaTitle: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-100"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">체크리스트 (줄바꿈으로 여러 개 입력)</label>
+                    <textarea
+                      rows={2}
+                      placeholder="할 일 1&#10;할 일 2"
+                      value={postForm.checklistText}
+                      onChange={(e) => setPostForm({ ...postForm, checklistText: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    />
+                  </div>
+
+                  <div className="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" onClick={closePostModal} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">취소</button>
+                    <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg">
+                      {editingPost ? '수정 저장' : '카드 올리기'}
                     </button>
                   </div>
                 </form>
               </div>
             </div>
           )}
+
+          {/* --- MODAL: NEW BOARD --- */}
+          {isBoardModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+              <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+                  <h3 className="text-base font-bold">새 협업 보드 만들기</h3>
+                  <button onClick={() => setIsBoardModalOpen(false)} className="text-slate-400 hover:text-white">
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateBoard} className="space-y-4 mt-4 text-xs">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">보드 이름</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="예: 디자인 아이디어 회의, 주간 업무 보드"
+                      value={boardForm.title}
+                      onChange={(e) => setBoardForm({ ...boardForm, title: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">보드 설명</label>
+                    <input
+                      type="text"
+                      placeholder="보드에 대한 간단한 설명"
+                      value={boardForm.description}
+                      onChange={(e) => setBoardForm({ ...boardForm, description: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">기본 레이아웃</label>
+                    <select
+                      value={boardForm.layout}
+                      onChange={(e) => setBoardForm({ ...boardForm, layout: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-slate-100"
+                    >
+                      <option value="grid">격자형 (Grid)</option>
+                      <option value="kanban">칸반보드 (할 일 / 진행 중 / 완료)</option>
+                      <option value="canvas">자유 배치 캔버스 (Canvas)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">배경 테마</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {BG_OPTIONS.map((bg) => (
+                        <button
+                          key={bg.label}
+                          type="button"
+                          onClick={() => setBoardForm({ ...boardForm, bgValue: bg.value, bgType: bg.type })}
+                          className={`p-2 rounded-xl border flex items-center justify-between ${
+                            boardForm.bgValue === bg.value ? 'border-indigo-500 bg-slate-800' : 'border-slate-800 bg-slate-800/40'
+                          }`}
+                        >
+                          <span>{bg.label}</span>
+                          <span className={`w-4 h-4 rounded-full ${bg.type === 'gradient' ? `bg-gradient-to-br ${bg.value}` : bg.value}`} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" onClick={() => setIsBoardModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">취소</button>
+                    <button type="submit" className="px-5 py-2 bg-indigo-600 text-white font-bold rounded-xl">생성하기</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* --- MODAL: SHARE --- */}
+          {isShareModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+              <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+                  <h3 className="text-base font-bold">친구·팀원과 보드 공유하기</h3>
+                  <button onClick={() => setIsShareModalOpen(false)} className="text-slate-400 hover:text-white">
+                    <Icon name="x" className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  아래 링크를 복사해 카카오톡이나 메신저로 공유하세요. 같은 주소로 접속한 사람들이 함께 카드를 보고 작업할 수 있습니다!
+                </p>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={window.location.href}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300"
+                  />
+                  <button
+                    onClick={handleCopyShareLink}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shrink-0"
+                  >
+                    복사
+                  </button>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button onClick={() => setIsShareModalOpen(false)} className="px-4 py-2 bg-slate-800 text-xs text-slate-300 rounded-xl">닫기</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // --- POST CARD COMPONENT ---
+    function PostCard({ post, columns, onLike, onPin, onEdit, onDelete, onToggleChecklist, onAddComment, onMoveColumn }) {
+      const [commentInput, setCommentInput] = useState('');
+      const [showComments, setShowComments] = useState(false);
+
+      const isDarkBg = post.color === '#1e293b';
+
+      const handleCommentSubmit = (e) => {
+        e.preventDefault();
+        if (commentInput.trim()) {
+          onAddComment(commentInput);
+          setCommentInput('');
+        }
+      };
+
+      return (
+        <div
+          className={`group relative rounded-2xl p-4 shadow-md hover:shadow-xl transition-all duration-200 border flex flex-col justify-between ${
+            isDarkBg ? 'text-slate-100 border-slate-700' : 'text-slate-800 border-slate-200/80'
+          }`}
+          style={{ backgroundColor: post.color || '#ffffff' }}
+        >
+          {post.pinned && (
+            <div className="absolute -top-2 -right-2 bg-amber-500 text-white p-1 rounded-full shadow-md z-10" title="상단 고정됨">
+              <Icon name="pin" className="w-3 h-3" />
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <h3 className="font-bold text-sm leading-snug">{post.title}</h3>
+              <div className="flex items-center space-x-1 bg-black/10 p-1 rounded-lg opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <button onClick={onPin} title="상단 고정" className="p-1 hover:bg-black/10 rounded">
+                  <Icon name="pin" className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={onEdit} title="수정" className="p-1 hover:bg-black/10 rounded">
+                  <Icon name="edit-3" className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={onDelete} title="삭제" className="p-1 hover:bg-black/10 rounded text-rose-600">
+                  <Icon name="trash-2" className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {post.content && (
+              <p className={`text-xs mb-3 whitespace-pre-line leading-relaxed ${isDarkBg ? 'text-slate-300' : 'text-slate-600'}`}>
+                {post.content}
+              </p>
+            )}
+
+            {post.media && (
+              <div className="mb-3 rounded-xl overflow-hidden border border-black/10 bg-black/5">
+                {post.media.type === 'image' && (
+                  <div>
+                    <img
+                      src={post.media.url}
+                      alt={post.media.caption || '첨부 이미지'}
+                      onError={(e) => { e.target.src = 'https://placehold.co/600x300/1e293b/94a3b8?text=Image+Preview'; }}
+                      className="w-full h-36 object-cover"
+                    />
+                    {post.media.caption && <p className="text-[10px] p-1.5 text-center opacity-75">{post.media.caption}</p>}
+                  </div>
+                )}
+                {post.media.type === 'link' && (
+                  <a href={post.media.url} target="_blank" rel="noreferrer" className="p-2.5 flex items-center space-x-2 hover:bg-black/10 transition">
+                    <Icon name="link-2" className="w-4 h-4 text-indigo-500" />
+                    <div className="overflow-hidden">
+                      <div className="text-xs font-semibold truncate">{post.media.title}</div>
+                      <div className="text-[10px] opacity-70 truncate">{post.media.url}</div>
+                    </div>
+                  </a>
+                )}
+              </div>
+            )}
+
+            {post.checklist && post.checklist.length > 0 && (
+              <div className="mb-3 space-y-1 bg-black/5 p-2 rounded-xl">
+                {post.checklist.map((item) => (
+                  <label key={item.id} className="flex items-center space-x-2 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      onChange={() => onToggleChecklist(item.id)}
+                      className="rounded text-indigo-600 cursor-pointer"
+                    />
+                    <span className={item.done ? 'line-through opacity-50' : 'font-medium'}>{item.text}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {post.tags && post.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                {post.tags.map((tag) => (
+                  <span key={tag} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/10">#{tag}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 border-t border-black/10 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <button onClick={onLike} className="flex items-center space-x-1 hover:opacity-75 font-semibold">
+                <span>❤️</span>
+                <span className="text-[11px]">{post.likes || 0}</span>
+              </button>
+
+              <button onClick={() => setShowComments(!showComments)} className="flex items-center space-x-1 hover:opacity-75 font-semibold">
+                <Icon name="message-square" className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="text-[11px]">{post.comments ? post.comments.length : 0}</span>
+              </button>
+
+              {columns && columns.length > 1 && (
+                <select
+                  value={post.column}
+                  onChange={(e) => onMoveColumn(e.target.value)}
+                  className="bg-black/5 hover:bg-black/10 text-[10px] font-semibold rounded-lg px-1.5 py-0.5 cursor-pointer focus:outline-none"
+                >
+                  {columns.map((col) => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {showComments && (
+              <div className="mt-1 space-y-2 pt-2 border-t border-black/10">
+                <div className="max-h-24 overflow-y-auto space-y-1">
+                  {(post.comments || []).map((cm) => (
+                    <div key={cm.id} className="bg-black/5 p-1.5 rounded-lg text-[11px]">
+                      <div className="flex justify-between font-bold text-[10px] opacity-70">
+                        <span>{cm.author}</span>
+                        <span>{cm.timestamp}</span>
+                      </div>
+                      <div>{cm.text}</div>
+                    </div>
+                  ))}
+                </div>
+                <form onSubmit={handleCommentSubmit} className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    placeholder="댓글 달기..."
+                    value={commentInput}
+                    onChange={(e) => setCommentInput(e.target.value)}
+                    className="w-full bg-black/5 text-xs rounded-lg px-2 py-1 focus:outline-none"
+                  />
+                  <button type="submit" className="bg-indigo-600 text-white text-[10px] px-2.5 py-1 rounded-lg font-bold">등록</button>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // --- DRAGGABLE CANVAS POST COMPONENT (MOUSE & TOUCH SUPPORT) ---
+    function DraggableCanvasPost({ post, onUpdatePos, ...props }) {
+      const [isDragging, setIsDragging] = useState(false);
+      const [position, setPosition] = useState({ x: post.x || 50, y: post.y || 60 });
+      const dragOffsetRef = useRef({ x: 0, y: 0 });
+
+      useEffect(() => {
+        if (!isDragging) {
+          setPosition({ x: post.x || 50, y: post.y || 60 });
+        }
+      }, [post.x, post.y, isDragging]);
+
+      const startDrag = (clientX, clientY) => {
+        setIsDragging(true);
+        dragOffsetRef.current = {
+          x: clientX - position.x,
+          y: clientY - position.y
+        };
+      };
+
+      const handleMouseDown = (e) => {
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.closest('a')) return;
+        startDrag(e.clientX, e.clientY);
+      };
+
+      const handleTouchStart = (e) => {
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.closest('a')) return;
+        const touch = e.touches[0];
+        startDrag(touch.clientX, touch.clientY);
+      };
+
+      useEffect(() => {
+        const handleMove = (clientX, clientY) => {
+          const newX = Math.max(10, clientX - dragOffsetRef.current.x);
+          const newY = Math.max(10, clientY - dragOffsetRef.current.y);
+          setPosition({ x: newX, y: newY });
+        };
+
+        const onMouseMove = (e) => handleMove(e.clientX, e.clientY);
+        const onTouchMove = (e) => {
+          if (isDragging) e.preventDefault();
+          const touch = e.touches[0];
+          handleMove(touch.clientX, touch.clientY);
+        };
+
+        const endDrag = () => {
+          if (isDragging) {
+            setIsDragging(false);
+            onUpdatePos(position.x, position.y);
+          }
+        };
+
+        if (isDragging) {
+          window.addEventListener('mousemove', onMouseMove);
+          window.addEventListener('mouseup', endDrag);
+          window.addEventListener('touchmove', onTouchMove, { passive: false });
+          window.addEventListener('touchend', endDrag);
+        }
+        return () => {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', endDrag);
+          window.removeEventListener('touchmove', onTouchMove);
+          window.removeEventListener('touchend', endDrag);
+        };
+      }, [isDragging, position, onUpdatePos]);
+
+      return (
+        <div
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          style={{
+            position: 'absolute',
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+            cursor: isDragging ? 'grabbing' : 'grab',
+            touchAction: 'none'
+          }}
+          className={`w-72 transition-shadow ${isDragging ? 'shadow-2xl scale-105 z-30' : 'z-20'}`}
+        >
+          <PostCard post={post} {...props} />
         </div>
       );
     }
