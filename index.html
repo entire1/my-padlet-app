@@ -48,7 +48,7 @@
         id: 'board-1',
         title: '🚀 팀 브레인스토밍 & 프로젝트 보드',
         description: '아이디어, 자료 조사, 그리고 할 일을 실시간으로 함께 공유하는 공간입니다.',
-        layout: 'grid', // 'grid' | 'kanban' | 'canvas'
+        layout: 'grid',
         bgType: 'gradient',
         bgValue: 'from-slate-900 via-indigo-950 to-slate-900',
         columns: ['할 일 (To Do)', '진행 중', '완료'],
@@ -130,7 +130,6 @@
       { label: '차콜 다크', bg: '#1e293b', border: '#334155' }
     ];
 
-    // Helper Icon Component using Lucide
     const Icon = ({ name, className = "w-4 h-4" }) => {
       const ref = useRef(null);
       useEffect(() => {
@@ -154,13 +153,11 @@
       const [searchQuery, setSearchQuery] = useState('');
       const [selectedTag, setSelectedTag] = useState('ALL');
 
-      // Modals
       const [isPostModalOpen, setIsPostModalOpen] = useState(false);
       const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
       const [isShareModalOpen, setIsShareModalOpen] = useState(false);
       const [editingPost, setEditingPost] = useState(null);
 
-      // Forms
       const [postForm, setPostForm] = useState({
         title: '',
         content: '',
@@ -189,36 +186,22 @@
 
       const appId = typeof __app_id !== 'undefined' ? __app_id : 'padlet-live-board';
 
-      // --- 1. INITIALIZE FIREBASE & AUTH ---
       useEffect(() => {
         const initFirebase = async () => {
           if (!window.FirebaseSDK) return;
           const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore } = window.FirebaseSDK;
 
-          // 환경 변수(__firebase_config)가 있으면 자동 연결, 없으면 내장 실시간 데모 설정 사용
-          let firebaseConfig = null;
-          if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-            try {
-              firebaseConfig = JSON.parse(__firebase_config);
-            } catch (e) {
-              console.warn('Config parse failed', e);
-            }
-          }
+          // ⚠️ 아래 빈칸 대신 본인의 Firebase 콘솔 설정값을 직접 입력하세요!
+          const firebaseConfig = {
+            apiKey: "여기에_진짜_API_키_입력",
+            authDomain: "내_프로젝트.firebaseapp.com",
+            projectId: "내_프로젝트_ID",
+            storageBucket: "내_프로젝트.appspot.com",
+            messagingSenderId: "내_메시징_발신자_ID",
+            appId: "내_앱_ID"
+          };
 
-          if (!firebaseConfig) {
-            // 👇 아래 중괄호 { } 안의 내용을 본인의 파이어베이스 설정값으로 채워주세요!
-           const firebaseConfig = {
-  apiKey: "AIzaSyB_qVG_HiPIr0ysswdt4BHb5FL8f1oM6FI",
-  authDomain: "my-padlet-4fbdc.firebaseapp.com",
-  projectId: "my-padlet-4fbdc",
-  storageBucket: "my-padlet-4fbdc.firebasestorage.app",
-  messagingSenderId: "91914410908",
-  appId: "1:91914410908:web:6d11a239b689af59e88659"
-};
-          }
-
-          if (!firebaseConfig || firebaseConfig.apiKey === "여기에_apiKey_입력" || firebaseConfig.apiKey === "AIzaSy_내_실제_API_키") {
-            console.log('Running in standalone mode or awaiting config');
+          if (!firebaseConfig || firebaseConfig.apiKey === "여기에_진짜_API_키_입력" || firebaseConfig.apiKey.includes("내_실제")) {
             setSyncStatusText('설정 필요 (firebaseConfig 미입력)');
             return;
           }
