@@ -124,7 +124,6 @@
       const [selectedTag, setSelectedTag] = useState('ALL');
 
       const [unlockedBoards, setUnlockedBoards] = useState({});
-      const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
       const [inputPassword, setInputPassword] = useState('');
 
       const [isPostModalOpen, setIsPostModalOpen] = useState(false);
@@ -272,9 +271,8 @@
 
       const sortedPosts = [...filteredPosts].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
-      const handleCreateBoard = async (e) => {
-        e.preventDefault();
-        
+      // 버튼 클릭으로 바로 실행되는 보드 생성 함수
+      const handleCreateBoardClick = () => {
         if (!boardForm.title.trim()) {
           showToast('보드 이름을 입력해주세요.');
           return;
@@ -307,7 +305,7 @@
         if (dbInstance && user && window.FirebaseSDK) {
           const { doc, setDoc } = window.FirebaseSDK;
           try {
-            await setDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', 'boards', newBoard.id), newBoard);
+            setDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', 'boards', newBoard.id), newBoard);
           } catch (err) {
             console.error('Cloud board creation error:', err);
           }
@@ -784,12 +782,11 @@
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateBoard} className="space-y-4 mt-4 text-xs">
+                <div className="space-y-4 mt-4 text-xs">
                   <div>
                     <label className="block text-slate-300 font-semibold mb-1">보드 이름</label>
                     <input
                       type="text"
-                      required
                       placeholder="예: 프로젝트 팀 보드"
                       value={boardForm.title}
                       onChange={(e) => setBoardForm({ ...boardForm, title: e.target.value })}
@@ -812,7 +809,6 @@
                     <label className="block text-slate-300 font-semibold mb-1">관리자 생성 비밀번호 (필수)</label>
                     <input
                       type="password"
-                      required
                       placeholder="기본 비밀번호: 1234"
                       value={boardForm.creatorPassword}
                       onChange={(e) => setBoardForm({ ...boardForm, creatorPassword: e.target.value })}
@@ -847,13 +843,14 @@
                   <div className="flex justify-end space-x-2 pt-3 border-t border-slate-800">
                     <button type="button" onClick={() => setIsBoardModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl">취소</button>
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={handleCreateBoardClick}
                       className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition cursor-pointer"
                     >
                       생성하기
                     </button>
                   </div>
-                </form>
+                </div>
               </div>
             </div>
           )}
