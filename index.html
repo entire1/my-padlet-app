@@ -117,6 +117,7 @@
       const [isCloudConnected, setIsCloudConnected] = useState(false);
       const [syncStatusText, setSyncStatusText] = useState('클라우드 연결 확인 중...');
       const [toastMsg, setToastMsg] = useState('');
+      const [boardModalError, setBoardModalError] = useState('');
 
       const [boards, setBoards] = useState(DEFAULT_BOARDS);
       const [activeBoardId, setActiveBoardId] = useState('board-1');
@@ -273,14 +274,16 @@
 
       // 버튼 클릭으로 바로 실행되는 보드 생성 함수
       const handleCreateBoardClick = () => {
+        setBoardModalError('');
+
         if (!boardForm.title.trim()) {
-          showToast('보드 이름을 입력해주세요.');
+          setBoardModalError('⚠️ 보드 이름을 입력해주세요.');
           return;
         }
 
         const ADMIN_CREATION_SECRET = "1234";
-        if (boardForm.creatorPassword !== ADMIN_CREATION_SECRET) {
-          showToast('관리자 생성 비밀번호가 틀렸습니다! (기본: 1234)');
+        if (boardForm.creatorPassword.trim() !== ADMIN_CREATION_SECRET) {
+          setBoardModalError('⚠️ 관리자 생성 비밀번호가 일치하지 않습니다. (기본값: 1234)');
           return;
         }
 
@@ -313,6 +316,7 @@
 
         setActiveBoardId(newBoard.id);
         setIsBoardModalOpen(false);
+        setBoardModalError('');
         setBoardForm({
           title: '',
           description: '',
@@ -474,7 +478,7 @@
         <div className={`min-h-screen flex flex-col font-sans transition-all duration-300 ${activeBoard.bgType === 'gradient' ? `bg-gradient-to-br ${activeBoard.bgValue}` : activeBoard.bgValue}`}>
           
           {toastMsg && (
-            <div className="fixed bottom-5 right-5 z-50 bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2 animate-bounce">
+            <div className="fixed bottom-5 right-5 z-[100] bg-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-bold flex items-center gap-2 animate-bounce">
               <Icon name="sparkles" className="w-4 h-4" />
               <span>{toastMsg}</span>
             </div>
@@ -504,7 +508,10 @@
                   </select>
 
                   <button
-                    onClick={() => setIsBoardModalOpen(true)}
+                    onClick={() => {
+                      setBoardModalError('');
+                      setIsBoardModalOpen(true);
+                    }}
                     title="새 보드 만들기"
                     className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition"
                   >
@@ -839,6 +846,12 @@
                       <option value="canvas">자유 배치 캔버스 (Canvas)</option>
                     </select>
                   </div>
+
+                  {boardModalError && (
+                    <div className="p-2.5 bg-rose-950/90 border border-rose-500/60 rounded-xl text-rose-200 text-xs font-semibold">
+                      {boardModalError}
+                    </div>
+                  )}
 
                   <div className="flex justify-end space-x-2 pt-3 border-t border-slate-800">
                     <button type="button" onClick={() => setIsBoardModalOpen(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition">취소</button>
