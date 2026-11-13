@@ -146,6 +146,7 @@
       const [user, setUser] = useState(null);
       const [dbInstance, setDbInstance] = useState(null);
       const [isCloudConnected, setIsCloudConnected] = useState(false);
+      const [syncStatusText, setSyncStatusText] = useState('클라우드 연결 확인 중...');
       const [toastMsg, setToastMsg] = useState('');
 
       const [boards, setBoards] = useState(DEFAULT_BOARDS);
@@ -205,8 +206,8 @@
           }
 
           if (!firebaseConfig) {
-            // 👇 아래 중괄호 { } 안에 파이어베이스에서 복사한 firebaseConfig 내용을 붙여넣으세요!
-            const firebaseConfig = {
+            // 👇 아래 중괄호 { } 안의 내용을 본인의 파이어베이스 설정값으로 채워주세요!
+           const firebaseConfig = {
   apiKey: "AIzaSyB_qVG_HiPIr0ysswdt4BHb5FL8f1oM6FI",
   authDomain: "my-padlet-4fbdc.firebaseapp.com",
   projectId: "my-padlet-4fbdc",
@@ -216,8 +217,9 @@
 };
           }
 
-          if (!firebaseConfig || firebaseConfig.apiKey === "여기에_apiKey_입력") {
+          if (!firebaseConfig || firebaseConfig.apiKey === "여기에_apiKey_입력" || firebaseConfig.apiKey === "AIzaSy_내_실제_API_키") {
             console.log('Running in standalone mode or awaiting config');
+            setSyncStatusText('설정 필요 (firebaseConfig 미입력)');
             return;
           }
 
@@ -235,10 +237,14 @@
 
             onAuthStateChanged(auth, (currentUser) => {
               setUser(currentUser);
-              if (currentUser) setIsCloudConnected(true);
+              if (currentUser) {
+                setIsCloudConnected(true);
+                setSyncStatusText('실시간 클라우드 동기화');
+              }
             });
           } catch (err) {
             console.error('Firebase connection error:', err);
+            setSyncStatusText(`인증 오류: ${err.code || err.message}`);
           }
         };
 
@@ -270,6 +276,8 @@
           },
           (error) => {
             console.error('Firestore sync error:', error);
+            setIsCloudConnected(false);
+            setSyncStatusText(`DB 권한 오류: ${error.code || '규칙 확인 필요'}`);
           }
         );
 
@@ -285,6 +293,7 @@
             await setDoc(doc(dbInstance, 'artifacts', appId, 'public', 'data', 'boards', updatedBoard.id), updatedBoard);
           } catch (err) {
             console.error('Cloud save failed:', err);
+            showToast(`저장 실패: ${err.code || 'Firestore 규칙을 확인하세요'}`);
           }
         }
       };
@@ -514,9 +523,9 @@
                   <p className="text-[11px] text-slate-400 max-w-[220px] sm:max-w-md truncate">
                     {activeBoard.description}
                   </p>
-                  <span className={`text-[10px] px-2 py-0.2 rounded-full flex items-center gap-1 font-semibold border ${isCloudConnected ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800' : 'bg-indigo-950/80 text-indigo-300 border-indigo-800'}`}>
+                  <span className={`text-[10px] px-2 py-0.2 rounded-full flex items-center gap-1 font-semibold border ${isCloudConnected ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800' : 'bg-amber-950/80 text-amber-300 border-amber-800'}`}>
                     <Icon name="wifi" className="w-2.5 h-2.5" />
-                    {isCloudConnected ? '실시간 클라우드 동기화' : '협업 보드 활성'}
+                    {syncStatusText}
                   </span>
                 </div>
               </div>
